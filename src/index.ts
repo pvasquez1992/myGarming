@@ -6,6 +6,7 @@ import { activityDto, dailyDto } from './mappers';
 import { openApiDocument } from './openapi';
 import { parseQuery } from './query';
 import { swaggerHtml } from './swagger';
+import { syncRoutes, readSyncStatus } from './sync';
 import type { ActivityRow, Bindings, DailyRow } from './types';
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -32,7 +33,7 @@ app.use('/api/*', async (c, next) => {
   await next();
 });
 
-app.get('/', c => c.json({ name: 'my-garmin-api', version: '0.1.0', documentation: '/docs', openapi: '/openapi.json' }));
+app.get('/', c => c.json({ name: 'my-garmin-api', version: '0.2.0', documentation: '/docs', openapi: '/openapi.json' }));
 app.get('/docs', c => c.html(swaggerHtml));
 app.get('/swagger', c => c.redirect('/docs'));
 app.get('/openapi.json', c => c.json(openApiDocument));
@@ -72,6 +73,9 @@ app.get('/api/sports', async c => {
   const rows = await c.env.DB.prepare('SELECT sport, COUNT(*) AS activityCount FROM activities GROUP BY sport ORDER BY activityCount DESC, sport').all();
   return c.json({ data: rows.results });
 });
+
+app.route('/sync', syncRoutes);
+app.get('/api/sync-status', async c => c.json({ data: await readSyncStatus(c.env.DB) }));
 
 app.get('/api/stats', async c => {
   const q = parseQuery(c.req.url, 'stats');

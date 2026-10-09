@@ -2,6 +2,7 @@ export type Bindings = {
   DB: D1Database;
   CORS_ORIGINS?: string;
   API_KEY?: string;
+  SYNC_KEY?: string;
 };
 
 export type ActivityRow = {
