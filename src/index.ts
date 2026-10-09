@@ -21,7 +21,7 @@ app.use('/api/*', async (c, next) => {
   const origins = (c.env.CORS_ORIGINS ?? '').split(',').map(x => x.trim()).filter(Boolean);
   return cors({
     origin: origin => origins.includes(origin) ? origin : undefined,
-    allowMethods: ['GET', 'OPTIONS'],
+    allowMethods: ['GET', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Authorization', 'Content-Type'],
     credentials: true,
   })(c, next);
@@ -29,6 +29,8 @@ app.use('/api/*', async (c, next) => {
 
 // Punto único de autenticación: opcional hoy; extensible a OIDC/JWT después.
 app.use('/api/*', async (c, next) => {
+  // DELETE has its own mandatory credential; a read key never grants deletion.
+  if (c.req.method === 'DELETE') return next();
   if (c.env.API_KEY) return bearerAuth<{ Bindings: Bindings }>({ token: c.env.API_KEY })(c, next);
   await next();
 });
@@ -67,6 +69,16 @@ app.get('/api/daily-stats', async c => {
   const rows = await c.env.DB.prepare(`SELECT * FROM daily_stats ${q.where} ORDER BY date DESC LIMIT ? OFFSET ?`)
     .bind(...q.values, q.limit, q.offset).all<DailyRow>();
   return c.json({ data: rows.results.map(dailyDto), pagination: pagination(q.limit, q.offset, count?.total ?? 0) });
+});
+
+app.delete('/api/activities/:id', async (c, next) => {
+  if (!c.env.DELETE_KEY) return c.json({ error: { code: 'deletion_disabled', message: 'Eliminación no configurada.' } }, 503);
+  return bearerAuth<{ Bindings: Bindings }>({ token: c.env.DELETE_KEY })(c, next);
+}, async c => {
+  const id = c.req.param('id');
+  if (!/^[1-9]\d{0,19}$/.test(id) || new URL(c.req.url).search) throw new HTTPException(400, { message: 'Indica solo el identificador de una actividad.' });
+  const result = await c.env.DB.prepare('DELETE FROM activities WHERE id = ?').bind(id).run();
+  return c.json({ data: { id, deleted: result.meta.changes === 1 } });
 });
 
 app.get('/api/sports', async c => {

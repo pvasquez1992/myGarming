@@ -43,6 +43,10 @@ La primera ejecución recorre todas las páginas del historial. Las ejecuciones 
 
 Cada lote admite hasta 100 actividades y se valida completo antes de escribir. El ID de Garmin es la clave del UPSERT: repetir la sincronización no crea duplicados. Los datos existentes se conservan si Garmin omite una métrica opcional. Una interrupción deja los lotes anteriores importados; el siguiente intento los puede repetir sin duplicarlos. No se borran automáticamente actividades eliminadas en Garmin y no se descargan archivos FIT, muestras de ruta ni resúmenes de salud diarios: el alcance actual son los resúmenes de actividades que muestra Ejercicio.
 
+Puedes borrar nuestra copia desde el detalle de una actividad en Ejercicio, usando **Eliminar de esta web** y confirmando, o mediante `DELETE /api/activities/{id}` en Swagger. La API exige `DELETE_KEY` (esquema `deleteBearer`), diferente de las claves de lectura e importación; Pages conserva la misma clave como secreto `GARMIN_DELETE_KEY` y comprueba tu sesión de Access y que la petición proceda de esta web. La clave no llega al navegador. DELETE repetido devuelve `deleted=false` sin error si ya no existe.
+
+La eliminación no modifica Garmin ni crea un bloqueo permanente de importación. Si la actividad sigue en Garmin, se recupera al volver a consultar su página: las recientes normalmente en la siguiente sincronización, las antiguas en la revisión completa diaria o al ejecutar el workflow manual con `full`. Si la has eliminado también de Garmin, la sincronización ya no la recibe y no la recrea. Una importación manual de un ZIP antiguo todavía puede recuperarla porque ese ZIP contiene su copia.
+
 Swagger documenta las nuevas rutas en `/docs`: `/sync/activities`, `/sync/session`, `/sync/status` requieren la clave de escritura `syncBearer`. `/api/sync-status` requiere la misma clave de lectura que las demás consultas y muestra únicamente el estado de sincronización.
 
 ## Límites del servicio
