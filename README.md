@@ -1,9 +1,9 @@
 # My Garmin API
 
 API personal en **TypeScript + Hono**, ejecutada en **Cloudflare Workers** con **D1**.
-El importador es una consola de **C# / .NET 10**, sin paquetes externos.
+El importador de ZIP es una consola de **C# / .NET 10**, sin paquetes externos. El sincronizador automático usa **Python + GitHub Actions**: [configuración y recuperación](SYNC.md).
 
-La base local y la base D1 de Cloudflare contienen **304 actividades** y **901 resúmenes diarios**, desde el 12 de febrero de 2024 hasta el 31 de julio de 2026.
+La importación inicial contiene **304 actividades** y **901 resúmenes diarios**, desde el 12 de febrero de 2024 hasta el 31 de julio de 2026. La sincronización automática actualiza los resúmenes de actividades; los resúmenes diarios siguen procediendo del ZIP.
 
 API publicada: <https://my-garmin-api.pvasquez1992.workers.dev/docs>. Las consultas `/api/*` están protegidas con una clave Bearer. La clave está guardada localmente en `.dev.vars`, excluido de Git; en Swagger se introduce con **Authorize**, sin el prefijo `Bearer`. Cloudflare Access todavía no se ha configurado para este Worker.
 

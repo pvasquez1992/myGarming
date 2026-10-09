@@ -14,4 +14,8 @@ data/
 **/bin/
 **/obj/
 *.log
+**/__pycache__/
+*.pyc
+garmin_tokens.json
+garmin-session*/
 

@@ -57,15 +57,66 @@ const errors = {
   '500': jsonResponse('Error interno.', ref('Error')),
 };
 const security = [{}, { bearerAuth: [] }];
+const syncSecurity = [{ syncBearer: [] }];
+const syncErrors = {
+  ...errors,
+  '401': jsonResponse('Se requiere SYNC_KEY, diferente de la clave de lectura.', ref('Error')),
+  '413': jsonResponse('El cuerpo supera 256 KiB.', ref('Error')),
+  '503': jsonResponse('Sincronización deshabilitada: falta SYNC_KEY.', ref('Error')),
+};
+const writeProperties = Object.fromEntries(Object.entries(activityProperties)
+  .filter(([key]) => !['averagePaceSecondsPerKm', 'startPosition', 'endPosition'].includes(key)));
+const syncStatus = {
+  type: 'object', properties: {
+    state: { type: 'string', enum: ['not_configured', 'ok', 'failed', 'reauth_required'] },
+    lastAttemptAt: { type: ['string', 'null'], format: 'date-time' },
+    lastSuccessAt: { type: ['string', 'null'], format: 'date-time' },
+    processedCount: { type: 'integer', minimum: 0 },
+  }, required: ['state', 'lastAttemptAt', 'lastSuccessAt', 'processedCount'],
+};
+const requestBody = (schema: object) => ({ required: true, content: { 'application/json': { schema } } });
 
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
-    title: 'My Garmin API', version: '0.1.0',
+    title: 'My Garmin API', version: '0.2.0',
     description: 'Historial personal importado desde Garmin. Sin OAuth2. Bearer opcional mediante API_KEY o protección externa con Cloudflare Access. Campos ausentes se devuelven como null. Las fechas de filtros corresponden a la fecha local de la actividad.',
   },
   servers: [{ url: '/' }],
   paths: {
+    '/api/sync-status': { get: {
+      summary: 'Última sincronización, sin credenciales ni sesión', security,
+      responses: { '200': jsonResponse('Estado.', envelope(ref('SyncStatus'))), ...errors },
+    } },
+    '/sync/activities': { post: {
+      summary: 'Importar o actualizar un lote por ID Garmin', security: syncSecurity, tags: ['Sincronización'],
+      description: 'Clave de escritura separada. Valida el lote completo antes de escribir. Las métricas opcionales ausentes conservan el valor previo. Unidades: metros, segundos, m/s y kcal.',
+      requestBody: requestBody({ type: 'object', additionalProperties: false, required: ['activities'], properties: {
+        activities: { type: 'array', minItems: 1, maxItems: 100, items: ref('ActivityImport') },
+      } }),
+      responses: { '200': jsonResponse('Importadas.', envelope({ type: 'object', properties: { processed: { type: 'integer' } } })), ...syncErrors },
+    } },
+    '/sync/session': {
+      get: { summary: 'Recuperar sesión cifrada y revisión', security: syncSecurity, tags: ['Sincronización'],
+        responses: { '200': jsonResponse('Sesión o null.', envelope({ oneOf: [
+          { type: 'null' }, { type: 'object', properties: { session: ref('EncryptedSession'), revision: { type: 'integer', minimum: 1 } } },
+        ] })), ...syncErrors } },
+      put: { summary: 'Guardar sesión cifrada sin sobrescribir otra renovación', security: syncSecurity, tags: ['Sincronización'],
+        requestBody: requestBody({ type: 'object', additionalProperties: false, required: ['session', 'expectedRevision'], properties: {
+          session: ref('EncryptedSession'), expectedRevision: { type: ['integer', 'null'], minimum: 1, description: 'null solo para crear la primera sesión.' },
+        } }),
+        responses: { '200': jsonResponse('Guardada.', envelope({ type: 'object', properties: { revision: { type: 'integer' } } })),
+          '409': jsonResponse('Otra ejecución cambió la sesión: vuelve a leerla.', ref('Error')), ...syncErrors } },
+    },
+    '/sync/status': {
+      get: { summary: 'Consultar estado desde el sincronizador', security: syncSecurity, tags: ['Sincronización'],
+        responses: { '200': jsonResponse('Estado.', envelope(ref('SyncStatus'))), ...syncErrors } },
+      put: { summary: 'Registrar resultado conservando la última fecha de éxito', security: syncSecurity, tags: ['Sincronización'],
+        requestBody: requestBody({ type: 'object', additionalProperties: false, required: ['state', 'processed'], properties: {
+          state: { type: 'string', enum: ['ok', 'failed', 'reauth_required'] }, processed: { type: 'integer', minimum: 0, maximum: 100000 },
+        } }),
+        responses: { '200': jsonResponse('Estado.', envelope(ref('SyncStatus'))), ...syncErrors } },
+    },
     '/health': { get: { summary: 'Comprobar API y conexión a D1', responses: {
       '200': jsonResponse('Disponible.', { type: 'object', properties: { status: { const: 'ok' } } }),
       '500': errors['500'],
@@ -104,8 +155,24 @@ export const openApiDocument = {
     } },
   },
   components: {
-    securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' } },
+    securitySchemes: {
+      bearerAuth: { type: 'http', scheme: 'bearer', description: 'API_KEY: consultas de lectura.' },
+      syncBearer: { type: 'http', scheme: 'bearer', description: 'SYNC_KEY: importación y sesión del sincronizador. No se entrega a la web.' },
+    },
     schemas: {
+      SyncStatus: syncStatus,
+      EncryptedSession: { type: 'object', additionalProperties: false, required: ['format', 'nonce', 'ciphertext'], properties: {
+        format: { const: 1 }, nonce: { type: 'string', pattern: '^[A-Za-z0-9+/]{16}$', description: 'Nonce AES-GCM de 12 bytes, base64.' },
+        ciphertext: { type: 'string', minLength: 24, maxLength: 32000, description: 'Sesión AES-256-GCM con etiqueta, base64. La clave nunca se envía al Worker.' },
+      } },
+      ActivityImport: { type: 'object', additionalProperties: false, properties: {
+        ...writeProperties, id: { type: 'string', pattern: '^[1-9][0-9]{0,19}$' },
+        name: { type: 'string', minLength: 1, maxLength: 500 }, sport: { type: 'string', pattern: '^[a-z][a-z0-9_]{0,63}$' },
+        startedAt: { type: 'string', format: 'date-time', example: '2026-10-09T12:00:00.000Z' },
+        durationSeconds: { type: 'number', minimum: 0 }, distanceMeters: { type: 'number', minimum: 0 },
+        startLatitude: { ...number, minimum: -90, maximum: 90 }, endLatitude: { ...number, minimum: -90, maximum: 90 },
+        startLongitude: { ...number, minimum: -180, maximum: 180 }, endLongitude: { ...number, minimum: -180, maximum: 180 },
+      }, required: ['id', 'name', 'sport', 'startedAt', 'localDate', 'durationSeconds', 'distanceMeters'] },
       Activity: { type: 'object', properties: activityProperties, required: Object.keys(activityProperties) },
       DailyStats: { type: 'object', properties: dailyProperties, required: Object.keys(dailyProperties) },
       Aggregate: { type: 'object', properties: aggregateProperties, required: Object.keys(aggregateProperties) },
