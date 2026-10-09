@@ -43,7 +43,7 @@ before(async () => {
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
   worker = spawn(process.execPath, [wrangler, 'dev', '--local', '--ip', '127.0.0.1', '--port', String(port),
-    '--persist-to', state, '--var', 'API_KEY:test-secret', '--var', 'CORS_ORIGINS:https://example.com'],
+    '--persist-to', state, '--var', 'API_KEY:test-secret', '--var', 'SYNC_KEY:test-sync-secret', '--var', 'CORS_ORIGINS:https://example.com'],
   { cwd: root, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
   worker.stdout.on('data', chunk => { output += chunk.toString(); });
   worker.stderr.on('data', chunk => { output += chunk.toString(); });
@@ -150,4 +150,55 @@ test('CORS solo permite orígenes explícitos y las respuestas no se cachean', a
   } });
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://example.com');
+});
+
+async function syncRequest(route, method = 'GET', body) {
+  return request('/sync/' + route, { method, headers: { Authorization: 'Bearer test-sync-secret', 'Content-Type': 'application/json' },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+}
+test('importación y sesión requieren la clave separada, y nunca se exponen por el estado público', async () => {
+  for (const route of ['/sync/session', '/sync/status']) {
+    assert.equal((await request(route)).response.status, 401);
+    assert.equal((await fetch(baseUrl + route)).status, 401);
+  }
+  assert.equal((await request('/sync/activities', { method: 'POST', body: '{}' })).response.status, 401);
+  assert.equal((await syncRequest('session')).body.data, null);
+  assert.equal((await request('/api/sync-status')).body.data.state, 'not_configured');
+});
+
+const incoming = id => ({ id, name: "Carrera O'Brian", sport: 'running', startedAt: '2026-10-09T12:00:00.000Z',
+  localDate: '2026-10-09', utcOffsetMinutes: -240, distanceMeters: 4321, durationSeconds: 1650 });
+test('POST usa UPSERT, conserva métricas previas ausentes y valida el lote antes de escribir', async () => {
+  assert.equal((await syncRequest('activities', 'POST', { activities: [{ ...incoming('500'), caloriesKcal: 320 }] })).response.status, 200);
+  assert.equal((await syncRequest('activities', 'POST', { activities: [{ ...incoming('500'), distanceMeters: 4500 }] })).body.data.processed, 1);
+  const row = (await request('/api/activities/500')).body.data;
+  assert.equal(row.distanceMeters, 4500);
+  assert.equal(row.caloriesKcal, 320);
+  assert.equal(row.name, "Carrera O'Brian");
+  assert.equal((await syncRequest('activities', 'POST', { activities: [incoming('501'), { ...incoming('502'), localDate: '2026-02-30' }] })).response.status, 400);
+  assert.equal((await request('/api/activities/501')).response.status, 404);
+  for (const bad of [
+    { ...incoming('501'), distanceMeters: -1 }, { ...incoming('501'), id: 501 },
+    { ...incoming('501'), startedAt: '2026-02-30T12:00:00.000Z' }, { ...incoming('501'), steps: 1.2 },
+    { ...incoming('501'), startLatitude: 91 }, { ...incoming('501'), unknown: 'field' },
+  ]) assert.equal((await syncRequest('activities', 'POST', { activities: [bad] })).response.status, 400);
+  assert.equal((await syncRequest('activities', 'POST', { activities: [incoming('501'), incoming('501')] })).response.status, 400);
+});
+test('sesión cifrada usa revisión para evitar que un reintento sobrescriba una renovación más reciente', async () => {
+  const session = { format: 1, nonce: 'AAAAAAAAAAAAAAAA', ciphertext: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' };
+  assert.equal((await syncRequest('session', 'PUT', { session, expectedRevision: null })).body.data.revision, 1);
+  assert.equal((await syncRequest('session', 'PUT', { session, expectedRevision: null })).response.status, 409);
+  assert.equal((await syncRequest('session', 'PUT', { session, expectedRevision: 1 })).body.data.revision, 2);
+  assert.equal((await syncRequest('session', 'PUT', { session, expectedRevision: 1 })).response.status, 409);
+  assert.equal((await syncRequest('session')).body.data.revision, 2);
+  assert.ok(!JSON.stringify((await request('/api/sync-status')).body).includes(session.ciphertext));
+});
+test('fallo de sincronización conserva la última fecha de éxito', async () => {
+  const success = await syncRequest('status', 'PUT', { state: 'ok', processed: 300 });
+  const last = success.body.data.lastSuccessAt;
+  assert.ok(last);
+  await syncRequest('status', 'PUT', { state: 'reauth_required', processed: 0 });
+  const result = (await request('/api/sync-status')).body.data;
+  assert.equal(result.state, 'reauth_required');
+  assert.equal(result.lastSuccessAt, last);
 });
