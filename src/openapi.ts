@@ -133,6 +133,16 @@ export const openApiDocument = {
         '200': jsonResponse('Actividad.', envelope(ref('Activity'))), ...errors,
         '404': jsonResponse('Actividad no encontrada.', ref('Error')),
       },
+    }, delete: {
+      summary: 'Eliminar una actividad de esta API', security: [{ deleteBearer: [] }],
+      description: 'No modifica Garmin. No bloquea futuras importaciones: si la actividad sigue en Garmin, el sincronizador puede recuperarla. Repetir DELETE devuelve deleted=false si ya no existe.',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: '^[1-9][0-9]{0,19}$' } }],
+      responses: { '200': jsonResponse('Resultado.', envelope({ type: 'object', required: ['id', 'deleted'], properties: {
+        id: { type: 'string' }, deleted: { type: 'boolean' },
+      } })), ...errors,
+        '401': jsonResponse('Se requiere DELETE_KEY; la clave de lectura no permite eliminar.', ref('Error')),
+        '503': jsonResponse('Eliminación deshabilitada: falta DELETE_KEY.', ref('Error')),
+      },
     } },
     '/api/daily-stats': { get: {
       summary: 'Consultar resúmenes diarios, de más reciente a más antiguo', security,
@@ -158,6 +168,7 @@ export const openApiDocument = {
     securitySchemes: {
       bearerAuth: { type: 'http', scheme: 'bearer', description: 'API_KEY: consultas de lectura.' },
       syncBearer: { type: 'http', scheme: 'bearer', description: 'SYNC_KEY: importación y sesión del sincronizador. No se entrega a la web.' },
+      deleteBearer: { type: 'http', scheme: 'bearer', description: 'DELETE_KEY: eliminar únicamente actividades de esta API. El navegador no recibe esta clave.' },
     },
     schemas: {
       SyncStatus: syncStatus,

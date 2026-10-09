@@ -3,6 +3,7 @@ export type Bindings = {
   CORS_ORIGINS?: string;
   API_KEY?: string;
   SYNC_KEY?: string;
+  DELETE_KEY?: string;
 };
 
 export type ActivityRow = {

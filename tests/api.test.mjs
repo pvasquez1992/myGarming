@@ -43,7 +43,7 @@ before(async () => {
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
   worker = spawn(process.execPath, [wrangler, 'dev', '--local', '--ip', '127.0.0.1', '--port', String(port),
-    '--persist-to', state, '--var', 'API_KEY:test-secret', '--var', 'SYNC_KEY:test-sync-secret', '--var', 'CORS_ORIGINS:https://example.com'],
+    '--persist-to', state, '--var', 'API_KEY:test-secret', '--var', 'SYNC_KEY:test-sync-secret', '--var', 'DELETE_KEY:test-delete-secret', '--var', 'CORS_ORIGINS:https://example.com'],
   { cwd: root, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
   worker.stdout.on('data', chunk => { output += chunk.toString(); });
   worker.stderr.on('data', chunk => { output += chunk.toString(); });
@@ -201,4 +201,34 @@ test('fallo de sincronización conserva la última fecha de éxito', async () =>
   const result = (await request('/api/sync-status')).body.data;
   assert.equal(result.state, 'reauth_required');
   assert.equal(result.lastSuccessAt, last);
+});
+
+test('DELETE exige permiso separado, solo borra el ID indicado y el sincronizador puede recuperarlo', async () => {
+  await syncRequest('activities', 'POST', { activities: [incoming('9001'), incoming('9002')] });
+  const remove = id => request('/api/activities/' + id, { method: 'DELETE', headers: { Authorization: 'Bearer test-delete-secret' } });
+  assert.equal((await fetch(baseUrl + '/api/activities/9001', { method: 'DELETE' })).status, 401);
+  for (const key of ['test-secret', 'test-sync-secret', 'wrong']) {
+    assert.equal((await request('/api/activities/9001', { method: 'DELETE', headers: { Authorization: 'Bearer ' + key } })).response.status, 401);
+  }
+  const beforeCount = (await request('/api/activities')).body.pagination.total;
+  const beforeDistance = (await request('/api/stats')).body.data.totals.distanceMeters;
+  assert.equal((await remove('9001?all=true')).response.status, 400);
+  assert.equal((await remove('not-an-id')).response.status, 400);
+  const removed = await remove('9001');
+  assert.equal(removed.response.status, 200);
+  assert.deepEqual(removed.body.data, { id: '9001', deleted: true });
+  assert.equal((await request('/api/activities/9001')).response.status, 404);
+  assert.equal((await request('/api/activities/9002')).response.status, 200);
+  assert.equal((await request('/api/activities')).body.pagination.total, beforeCount - 1);
+  assert.equal((await request('/api/stats')).body.data.totals.distanceMeters, beforeDistance - 4321);
+  assert.equal((await remove('9001')).body.data.deleted, false);
+  // Garmin still contains 9001: importing its ID again restores it normally.
+  await syncRequest('activities', 'POST', { activities: [incoming('9001')] });
+  assert.equal((await request('/api/activities/9001')).response.status, 200);
+  // Garmin no longer contains 9002: subsequent batches do not recreate it.
+  await remove('9002');
+  await syncRequest('activities', 'POST', { activities: [incoming('9001')] });
+  assert.equal((await request('/api/activities/9002')).response.status, 404);
+  const schema = (await request('/openapi.json')).body;
+  assert.deepEqual(schema.paths['/api/activities/{id}'].delete.security, [{ deleteBearer: [] }]);
 });
