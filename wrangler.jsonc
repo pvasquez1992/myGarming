@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "my-garmin",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "4014e756-565b-4e2e-a198-9bedd7dab771",
       "migrations_dir": "migrations"
     }
   ],

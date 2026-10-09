@@ -3,11 +3,13 @@
 API personal en **TypeScript + Hono**, ejecutada en **Cloudflare Workers** con **D1**.
 El importador es una consola de **C# / .NET 10**, sin paquetes externos.
 
-En esta carpeta ya se preparó la base **local** con **304 actividades** y **901 resúmenes diarios**, desde el 12 de febrero de 2024 hasta el 31 de julio de 2026. No se ha creado ningún recurso en tu cuenta de Cloudflare.
+La base local y la base D1 de Cloudflare contienen **304 actividades** y **901 resúmenes diarios**, desde el 12 de febrero de 2024 hasta el 31 de julio de 2026.
+
+API publicada: <https://my-garmin-api.pvasquez1992.workers.dev/docs>. Las consultas `/api/*` están protegidas con una clave Bearer. La clave está guardada localmente en `.dev.vars`, excluido de Git; en Swagger se introduce con **Authorize**, sin el prefijo `Bearer`. Cloudflare Access todavía no se ha configurado para este Worker.
 
 ## Probar lo que ya está preparado
 
-Abre PowerShell en `C:\myGarming`. Como el Node global de este equipo es 18, se descargó Node 24 LTS portable dentro de `.tools`, verificado con el SHA-256 publicado por Node.js. Para usarlo únicamente en esta terminal:
+Abre PowerShell en `C:\myGarming\myGarming`. Como el Node global de este equipo es 18, se descargó Node 24 LTS portable dentro de `.tools`, verificado con el SHA-256 publicado por Node.js. Para usarlo únicamente en esta terminal:
 
 ```powershell
 . .\scripts\use-node.ps1
@@ -16,7 +18,7 @@ npm run dev
 
 Abre **Swagger UI** en <http://127.0.0.1:8787/docs> para explorar las rutas y ejecutar consultas con **Try it out**.
 También puedes abrir <http://127.0.0.1:8787/health> o <http://127.0.0.1:8787/api/activities?limit=5>.
-El servidor escucha solo en tu ordenador. En desarrollo no exige autenticación por defecto.
+El servidor escucha solo en tu ordenador. Sin `.dev.vars` no exige autenticación; en este equipo `.dev.vars` ya contiene la clave Bearer usada durante el despliegue.
 
 ## Instalar en otro equipo
 
@@ -116,7 +118,9 @@ Para conectar una web alojada en otro origen, configura `CORS_ORIGINS` en `wrang
 
 ## Desplegar en Cloudflare
 
-Estos pasos sí crean y modifican recursos en tu cuenta; aún no se han ejecutado:
+El primer despliegue ya se realizó el 9 de octubre de 2026. La base `my-garmin` y el Worker `my-garmin-api` ya existen. Para publicar cambios de código basta con `npm run deploy`; para actualizar datos, genera el nuevo SQL y ejecútalo con `--remote`.
+
+Los pasos de abajo documentan cómo realizar un primer despliegue en otra cuenta; no es necesario volver a crear la base existente:
 
 ```powershell
 npx wrangler login
