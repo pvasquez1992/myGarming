@@ -1,0 +1,17 @@
+node_modules/
+.wrangler/
+.tools/
+dist/
+public/swagger/
+data/
+*.zip
+*.fit
+*.bak
+.dev.vars
+.env
+.env.*
+!.env.example
+**/bin/
+**/obj/
+*.log
+

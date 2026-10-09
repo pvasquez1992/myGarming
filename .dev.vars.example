@@ -1,0 +1,2 @@
+# Opcional: si se define, /api/* exige Authorization: Bearer <valor>.
+# API_KEY=una-clave-larga-generada-por-ti
