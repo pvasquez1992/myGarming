@@ -4,6 +4,8 @@ El reloj sincroniza con Garmin Connect a través de tu teléfono o Garmin Expres
 
 No usa Azure, Foundry ni un modelo de IA. El equipo personal puede estar apagado una vez conectada la cuenta. El repositorio es público y utiliza runners estándar gratuitos de GitHub; los datos personales y las claves no se publican en él.
 
+Estado al 9 de octubre de 2026: cuenta conectada, `GARMIN_SYNC_ENABLED=true` y [primera ejecución real desde GitHub completada](https://github.com/pvasquez1992/myGarming/actions/runs/37964911235). Se importaron 329 actividades, hasta el 8 de octubre; repetir la importación completa mantuvo las mismas 329 filas sin duplicarlas.
+
 ## Primer acceso y renovación
 
 En este equipo ya está preparado Python portable y un entorno aislado dentro de `.tools`, fuera de Git. Las claves locales están protegidas mediante Windows DPAPI para este usuario. Ejecuta:

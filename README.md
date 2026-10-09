@@ -5,6 +5,8 @@ El importador de ZIP es una consola de **C# / .NET 10**, sin paquetes externos. 
 
 La importación inicial contiene **304 actividades** y **901 resúmenes diarios**, desde el 12 de febrero de 2024 hasta el 31 de julio de 2026. La sincronización automática actualiza los resúmenes de actividades; los resúmenes diarios siguen procediendo del ZIP.
 
+La sincronización automática quedó activada el **9 de octubre de 2026**. La primera importación completa recuperó **329 actividades**, con la más reciente del **8 de octubre**. [La ejecución alojada en GitHub terminó correctamente](https://github.com/pvasquez1992/myGarming/actions/runs/37964911235); el calendario comprueba nuevas actividades aproximadamente cada 30 minutos.
+
 API publicada: <https://my-garmin-api.pvasquez1992.workers.dev/docs>. Las consultas `/api/*` están protegidas con una clave Bearer. La clave está guardada localmente en `.dev.vars`, excluido de Git; en Swagger se introduce con **Authorize**, sin el prefijo `Bearer`. Cloudflare Access todavía no se ha configurado para este Worker.
 
 ## Probar lo que ya está preparado
