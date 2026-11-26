@@ -1,0 +1,2 @@
+CREATE TABLE movie_watchlist (movie_id TEXT PRIMARY KEY, watched INTEGER NOT NULL DEFAULT 0 CHECK(watched IN (0,1)), watched_at TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+INSERT INTO movie_watchlist(movie_id) VALUES ('home-alone-1990'),('home-alone-2-1992'),('home-alone-3-1997'),('grinch-2000'),('kranks-2004'),('bad-santa-2003'),('polar-express-2004'),('elf-2003'),('miracle-1994'),('jack-frost-1998'),('surviving-christmas-2004'),('jingle-all-the-way-1996'),('scrooged-1988'),('trapped-in-paradise-1994');
