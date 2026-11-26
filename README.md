@@ -1,4 +1,4 @@
-# My Garmin API
+# My Garmin API and others
 
 API personal en **TypeScript + Hono**, ejecutada en **Cloudflare Workers** con **D1**.
 El importador de ZIP es una consola de **C# / .NET 10**, sin paquetes externos. El sincronizador automático usa **Python + GitHub Actions**: [configuración y recuperación](SYNC.md).
