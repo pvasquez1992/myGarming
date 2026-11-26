@@ -199,7 +199,7 @@ export const openApiDocument = {
         movie_id: { type: 'string', example: 'home-alone-1990' },
         watched: { type: 'integer', enum: [0, 1] },
         watched_at: { type: ['string', 'null'], example: '2026-11-26 13:00:00' },
-        updated_at: { type: 'string', example: '2026-11-26 13:00:00' },
+        updated_at: { type: ['string', 'null'], description: 'Null cuando la película todavía no tiene progreso guardado.', example: '2026-11-26 13:00:00' },
       } },
       MovieError: { type: 'object', required: ['error'], properties: { error: { type: 'object', required: ['message'], properties: { message: { type: 'string' } } } } },
       SyncStatus: syncStatus,

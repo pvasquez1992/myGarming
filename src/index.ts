@@ -101,19 +101,29 @@ app.get('/api/stats', async c => {
   return c.json({ data: { totals, bySport: bySport.results } });
 });
 
+// Catalog IDs are server-controlled; an unwatched film need not have a D1 row yet.
+const movieIds = ["home-alone-1990","home-alone-2-1992","home-alone-3-1997","grinch-2000","kranks-2004","bad-santa-2003","polar-express-2004","elf-2003","miracle-1994","jack-frost-1998","surviving-christmas-2004","jingle-all-the-way-1996","scrooged-1988","trapped-in-paradise-1994","christmas-story-1983"].sort();
+type MovieRow = { movie_id: string; watched: number; watched_at: string | null; updated_at: string | null };
+
 app.get('/api/movies', async c => {
   if (!c.env.API_KEY) return c.json({error:{message:'Movie API not configured'}},503);
-  const rows = await c.env.DB.prepare('SELECT * FROM movie_watchlist ORDER BY movie_id').all();
-  return c.json({data:rows.results});
+  const rows = await c.env.DB.prepare('SELECT movie_id, watched, watched_at, updated_at FROM movie_watchlist ORDER BY movie_id').all<MovieRow>();
+  const saved = new Map(rows.results.map(row => [row.movie_id, row]));
+  return c.json({data:movieIds.map(id => saved.get(id) ?? {movie_id:id,watched:0,watched_at:null,updated_at:null})});
 });
 app.put('/api/movies/:id', async c => {
   if (!c.env.API_KEY) return c.json({error:{message:'Movie API not configured'}},503);
   const body = await c.req.json().catch(() => null);
   if (!body || typeof body.watched !== 'boolean') return c.json({error:{message:'Invalid watched value'}},400);
   const id = c.req.param('id');
-  const result = await c.env.DB.prepare('UPDATE movie_watchlist SET watched = ?, watched_at = CASE WHEN ? = 0 THEN NULL ELSE COALESCE(watched_at,CURRENT_TIMESTAMP) END, updated_at = CURRENT_TIMESTAMP WHERE movie_id = ?').bind(Number(body.watched),Number(body.watched),id).run();
-  if (!result.meta.changes) return c.json({error:{message:'Movie not found'}},404);
-  return c.json({data:{movie_id:id,watched:Number(body.watched)}});
+  if (!movieIds.includes(id)) return c.json({error:{message:'Movie not found'}},404);
+  const watched = Number(body.watched);
+  await c.env.DB.prepare(`INSERT INTO movie_watchlist(movie_id,watched,watched_at,updated_at)
+    VALUES (?, ?, CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END, CURRENT_TIMESTAMP)
+    ON CONFLICT(movie_id) DO UPDATE SET watched=excluded.watched,
+    watched_at=CASE WHEN excluded.watched=0 THEN NULL ELSE COALESCE(movie_watchlist.watched_at,CURRENT_TIMESTAMP) END,
+    updated_at=CURRENT_TIMESTAMP`).bind(id,watched,watched).run();
+  return c.json({data:{movie_id:id,watched}});
 });
 
 app.notFound(c => c.json({ error: { code: 'not_found', message: 'Ruta no encontrada.' } }, 404));
