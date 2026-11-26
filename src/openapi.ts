@@ -84,6 +84,30 @@ export const openApiDocument = {
   },
   servers: [{ url: '/' }],
   paths: {
+    '/api/movies': { get: {
+      tags: ['Películas'], summary: 'Consultar progreso de películas navideñas',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        '200': jsonResponse('Progreso.', envelope({ type: 'array', items: ref('MovieWatchlist') })),
+        '401': jsonResponse('Bearer inválido.', { type: 'string' }),
+        '503': jsonResponse('API_KEY no configurada.', ref('MovieError')),
+        '500': errors['500'],
+      },
+    } },
+    '/api/movies/{id}': { put: {
+      tags: ['Películas'], summary: 'Marcar o desmarcar una película como vista',
+      security: [{ bearerAuth: [] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', example: 'home-alone-1990' } }],
+      requestBody: requestBody({ type: 'object', required: ['watched'], properties: { watched: { type: 'boolean', example: true } } }),
+      responses: {
+        '200': jsonResponse('Progreso actualizado.', envelope({ type: 'object', required: ['movie_id', 'watched'], properties: { movie_id: { type: 'string' }, watched: { type: 'integer', enum: [0, 1] } } })),
+        '400': jsonResponse('Valor watched inválido.', ref('MovieError')),
+        '401': jsonResponse('Bearer inválido.', { type: 'string' }),
+        '404': jsonResponse('Película no encontrada.', ref('MovieError')),
+        '503': jsonResponse('API_KEY no configurada.', ref('MovieError')),
+        '500': errors['500'],
+      },
+    } },
     '/api/sync-status': { get: {
       summary: 'Última sincronización, sin credenciales ni sesión', security,
       responses: { '200': jsonResponse('Estado.', envelope(ref('SyncStatus'))), ...errors },
@@ -166,11 +190,18 @@ export const openApiDocument = {
   },
   components: {
     securitySchemes: {
-      bearerAuth: { type: 'http', scheme: 'bearer', description: 'API_KEY: consultas de lectura.' },
+      bearerAuth: { type: 'http', scheme: 'bearer', description: 'API_KEY: consultas de lectura y actualización del checklist de películas.' },
       syncBearer: { type: 'http', scheme: 'bearer', description: 'SYNC_KEY: importación y sesión del sincronizador. No se entrega a la web.' },
       deleteBearer: { type: 'http', scheme: 'bearer', description: 'DELETE_KEY: eliminar únicamente actividades de esta API. El navegador no recibe esta clave.' },
     },
     schemas: {
+      MovieWatchlist: { type: 'object', required: ['movie_id', 'watched', 'watched_at', 'updated_at'], properties: {
+        movie_id: { type: 'string', example: 'home-alone-1990' },
+        watched: { type: 'integer', enum: [0, 1] },
+        watched_at: { type: ['string', 'null'], example: '2026-11-26 13:00:00' },
+        updated_at: { type: 'string', example: '2026-11-26 13:00:00' },
+      } },
+      MovieError: { type: 'object', required: ['error'], properties: { error: { type: 'object', required: ['message'], properties: { message: { type: 'string' } } } } },
       SyncStatus: syncStatus,
       EncryptedSession: { type: 'object', additionalProperties: false, required: ['format', 'nonce', 'ciphertext'], properties: {
         format: { const: 1 }, nonce: { type: 'string', pattern: '^[A-Za-z0-9+/]{16}$', description: 'Nonce AES-GCM de 12 bytes, base64.' },
