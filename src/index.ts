@@ -101,6 +101,21 @@ app.get('/api/stats', async c => {
   return c.json({ data: { totals, bySport: bySport.results } });
 });
 
+app.get('/api/movies', async c => {
+  if (!c.env.API_KEY) return c.json({error:{message:'Movie API not configured'}},503);
+  const rows = await c.env.DB.prepare('SELECT * FROM movie_watchlist ORDER BY movie_id').all();
+  return c.json({data:rows.results});
+});
+app.put('/api/movies/:id', async c => {
+  if (!c.env.API_KEY) return c.json({error:{message:'Movie API not configured'}},503);
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body.watched !== 'boolean') return c.json({error:{message:'Invalid watched value'}},400);
+  const id = c.req.param('id');
+  const result = await c.env.DB.prepare('UPDATE movie_watchlist SET watched = ?, watched_at = CASE WHEN ? = 0 THEN NULL ELSE COALESCE(watched_at,CURRENT_TIMESTAMP) END, updated_at = CURRENT_TIMESTAMP WHERE movie_id = ?').bind(Number(body.watched),Number(body.watched),id).run();
+  if (!result.meta.changes) return c.json({error:{message:'Movie not found'}},404);
+  return c.json({data:{movie_id:id,watched:Number(body.watched)}});
+});
+
 app.notFound(c => c.json({ error: { code: 'not_found', message: 'Ruta no encontrada.' } }, 404));
 app.onError((error, c) => {
   if (error instanceof HTTPException) {
